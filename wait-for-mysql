@@ -1,7 +1,12 @@
 #!/bin/sh
+set -e
 
 TIMEOUT=15
 QUIET=0
+HOST=localhost
+PORT=3306
+MYSQL_USER=root
+MYSQL_PASSWORD=
 
 echoerr() {
   if [ "$QUIET" -ne 1 ]; then printf "%s\n" "$*" 1>&2; fi
@@ -11,9 +16,11 @@ usage() {
   exitcode="$1"
   cat << USAGE >&2
 Usage:
-  $cmdname host:port [-t timeout] [-- command args]
+  $cmdname host:port [-t timeout] [-u user] [-p password] [-- command args]
   -q | --quiet                        Do not output any status messages
   -t TIMEOUT | --timeout=timeout      Timeout in seconds, zero for no timeout
+  -u USER | --user=user               MySQL user. Default is 'root'
+  -p PASSWORD | --password=password   MySQL password
   -- COMMAND ARGS                     Execute command with args after the test finishes
 USAGE
   exit "$exitcode"
@@ -21,8 +28,8 @@ USAGE
 
 wait_for() {
   for i in `seq $TIMEOUT` ; do
-    nc -z "$HOST" "$PORT" > /dev/null 2>&1
-    
+    mysqladmin status --protocol tcp --host "$HOST" --port "$PORT" --user "$MYSQL_USER" --password="$MYSQL_PASSWORD" > /dev/null 2>&1
+
     result=$?
     if [ $result -eq 0 ] ; then
       if [ $# -gt 0 ] ; then
@@ -30,11 +37,17 @@ wait_for() {
       fi
       exit 0
     fi
+
     sleep 1
   done
   echo "Operation timed out" >&2
   exit 1
 }
+
+if ! command -v mysqladmin >/dev/null 2>&1 ; then
+  echo "mysqladmin: not found" >&2
+  exit 127
+fi
 
 while [ $# -gt 0 ]
 do
@@ -57,6 +70,24 @@ do
     TIMEOUT="${1#*=}"
     shift 1
     ;;
+    -u)
+    MYSQL_USER="$2"
+    if [ "$MYSQL_USER" = "" ]; then break; fi
+    shift 2
+    ;;
+    --user=*)
+    MYSQL_USER="${1#*=}"
+    shift 1
+    ;;
+    -p)
+    MYSQL_PASSWORD="$2"
+    if [ "$MYSQL_PASSWORD" = "" ]; then break; fi
+    shift 2
+    ;;
+    --password=*)
+    MYSQL_PASSWORD="${1#*=}"
+    shift 1
+    ;;
     --)
     shift
     break
@@ -70,10 +101,5 @@ do
     ;;
   esac
 done
-
-if [ "$HOST" = "" -o "$PORT" = "" ]; then
-  echoerr "Error: you need to provide a host and port to test."
-  usage 2
-fi
 
 wait_for "$@"

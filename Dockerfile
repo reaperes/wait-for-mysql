@@ -1,11 +1,23 @@
-FROM node:alpine
+FROM alpine:3.8
+#FROM mysql:5.7
 
-RUN apk add --no-cache bash
+LABEL maintainer="reaperes105@gmail.com"
 
-RUN mkdir -p /app
-WORKDIR /app
+#RUN \
+#  adduser -h /home/mysql -s /sbin/nologin -u 1000 -D mysql && \
+#  apk add --no-cache \
+#    mariadb-client
 
-COPY . /app
-RUN npm install
+RUN apk update && apk add mysql-client && rm -f /var/cache/apk/*
 
-CMD ./node_modules/.bin/bats wait-for.bats
+#COPY wait-for-mysql /home/mysql/wait-for-mysql
+#RUN chmod +x /home/mysql/wait-for-mysql
+COPY wait-for-mysql /wait-for-mysql
+RUN chmod +x /wait-for-mysql
+COPY test.sh /test.sh
+RUN chmod +x /test.sh
+
+#USER mysql
+#WORKDIR /home/mysql
+#ENTRYPOINT ["/wait-for-mysql"]
+ENTRYPOINT ["/test.sh"]
